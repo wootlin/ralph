@@ -99,6 +99,88 @@ path_without() {
     [[ "$output" != *"no md5sum or md5 command found"* ]]
 }
 
+# ─── env-var propagation tests ──────────────────────────────────────────────
+# Creates a mock devcontainer that records its args to a log file and exits 0.
+# Stubs ralph into PATH so cmd_sandbox's `command -v ralph` resolves correctly.
+setup_sandbox_mock() {
+    local mock_bin="$TEST_DIR/mock-bin"
+    mkdir -p "$mock_bin"
+    export DEVCONTAINER_CALL_LOG="$TEST_DIR/devcontainer.log"
+    cat > "$mock_bin/devcontainer" << 'MOCKEOF'
+#!/usr/bin/env bash
+printf '%s\n' "$@" >> "$DEVCONTAINER_CALL_LOG"
+printf -- '---\n' >> "$DEVCONTAINER_CALL_LOG"
+exit 0
+MOCKEOF
+    chmod +x "$mock_bin/devcontainer"
+    ln -s "$RALPH" "$mock_bin/ralph"
+    mkdir -p "$RALPH_CONFIG_DIR/container"
+    echo '{}' > "$RALPH_CONFIG_DIR/container/devcontainer.json"
+    export PATH="$mock_bin:$PATH"
+    unset SSH_AUTH_SOCK
+}
+
+@test "sandbox propagates OPENROUTER_API_KEY when set" {
+    setup_sandbox_mock
+    unset OPENROUTER_API_KEY
+    export OPENROUTER_API_KEY="or-key-123"
+    run "$RALPH" sandbox
+    [[ "$status" -eq 0 ]]
+    grep -q "^OPENROUTER_API_KEY=or-key-123$" "$DEVCONTAINER_CALL_LOG"
+}
+
+@test "sandbox does not propagate OPENROUTER_API_KEY when unset" {
+    setup_sandbox_mock
+    unset OPENROUTER_API_KEY
+    run "$RALPH" sandbox
+    [[ "$status" -eq 0 ]]
+    ! grep -q "^OPENROUTER_API_KEY=" "$DEVCONTAINER_CALL_LOG"
+}
+
+@test "sandbox propagates ANTHROPIC_BASE_URL when set" {
+    setup_sandbox_mock
+    unset ANTHROPIC_BASE_URL
+    export ANTHROPIC_BASE_URL="https://proxy.example.com"
+    run "$RALPH" sandbox
+    [[ "$status" -eq 0 ]]
+    grep -q "^ANTHROPIC_BASE_URL=https://proxy.example.com$" "$DEVCONTAINER_CALL_LOG"
+}
+
+@test "sandbox propagates ANTHROPIC_AUTH_TOKEN when set" {
+    setup_sandbox_mock
+    unset ANTHROPIC_AUTH_TOKEN
+    export ANTHROPIC_AUTH_TOKEN="bearer-token-abc"
+    run "$RALPH" sandbox
+    [[ "$status" -eq 0 ]]
+    grep -q "^ANTHROPIC_AUTH_TOKEN=bearer-token-abc$" "$DEVCONTAINER_CALL_LOG"
+}
+
+@test "sandbox propagates ANTHROPIC_API_KEY when set" {
+    setup_sandbox_mock
+    unset ANTHROPIC_API_KEY
+    export ANTHROPIC_API_KEY="sk-ant-key-123"
+    run "$RALPH" sandbox
+    [[ "$status" -eq 0 ]]
+    grep -q "^ANTHROPIC_API_KEY=sk-ant-key-123$" "$DEVCONTAINER_CALL_LOG"
+}
+
+@test "sandbox propagates ANTHROPIC_API_KEY even when set to empty string" {
+    setup_sandbox_mock
+    unset ANTHROPIC_API_KEY
+    export ANTHROPIC_API_KEY=""
+    run "$RALPH" sandbox
+    [[ "$status" -eq 0 ]]
+    grep -q "^ANTHROPIC_API_KEY=$" "$DEVCONTAINER_CALL_LOG"
+}
+
+@test "sandbox does not propagate ANTHROPIC_API_KEY when unset" {
+    setup_sandbox_mock
+    unset ANTHROPIC_API_KEY
+    run "$RALPH" sandbox
+    [[ "$status" -eq 0 ]]
+    ! grep -q "^ANTHROPIC_API_KEY=" "$DEVCONTAINER_CALL_LOG"
+}
+
 @test "sandbox hash detection fails when no hashing command exists" {
     # Test the detection logic directly in a subshell with an empty PATH;
     # command is a bash builtin so it works even without PATH entries.
