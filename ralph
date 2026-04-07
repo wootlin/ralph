@@ -305,6 +305,15 @@ cmd_sandbox() {
     if [[ -n "${OPENROUTER_API_KEY:-}" ]]; then
         ssh_env+=("--remote-env" "OPENROUTER_API_KEY=$OPENROUTER_API_KEY")
     fi
+    if [[ -n "${ANTHROPIC_BASE_URL:-}" ]]; then
+        ssh_env+=("--remote-env" "ANTHROPIC_BASE_URL=$ANTHROPIC_BASE_URL")
+    fi
+    if [[ -n "${ANTHROPIC_AUTH_TOKEN:-}" ]]; then
+        ssh_env+=("--remote-env" "ANTHROPIC_AUTH_TOKEN=$ANTHROPIC_AUTH_TOKEN")
+    fi
+    if [[ -n "${ANTHROPIC_API_KEY+set}" ]]; then
+        ssh_env+=("--remote-env" "ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}")
+    fi
 
     # Shell history volume (deterministic per workspace)
     local workspace_hash
