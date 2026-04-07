@@ -104,5 +104,9 @@ RUN npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}
 # Codex CLI
 RUN npm install -g @openai/codex
 
+# dev-browser (headless browser for AI agents, uses Playwright/Chromium)
+RUN npm install -g dev-browser \
+  && npx playwright install --with-deps chromium
+
 # SDKMAN (no JDK — projects provide their own via .sdkmanrc)
 RUN curl -s "https://get.sdkman.io" | bash
