@@ -487,7 +487,9 @@ cmd_loop() {
     # Build the backend command array now that model is resolved
     build_backend_cmd "$model"
 
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    local divider
+    divider=$(printf '━%.0s' $(seq 1 $((64 + ${#max_iterations}))))
+    echo "$divider"
     echo "Mode:    $mode"
     echo "Backend: $BACKEND_NAME"
     echo "Prompt:  $prompt_file"
@@ -495,7 +497,7 @@ cmd_loop() {
     echo "Model:   $model"
     echo "Max:     $max_iterations iterations"
     [[ -n "$goal" ]] && echo "Goal:    $goal"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "$divider"
 
     # Permission handling:
     #   Backends run non-interactively and cannot prompt for tool approval,
