@@ -28,8 +28,10 @@ backend_claude() {
     BACKEND_JQ_FLAGS=(-r)
     BACKEND_JQ_FILTER='select(.type == "result") | .result // empty'
     BACKEND_STDIN_PROMPT=true
-    BACKEND_HINTS="- Use **Sonnet** subagents for search/read, **Opus** subagents for complex reasoning
-- Read \`CLAUDE.md\` (if present) for project-specific guidance"
+    BACKEND_HINTS='
+- Use the /commit skill if available, otherwise use git commands directly
+- Use **Sonnet** subagents for search/read, **Opus** subagents for complex reasoning
+- Read AGENTS.md OR CLAUDE.md for project-specific guidance'
     # shellcheck disable=SC2317,SC2329  # Invoked indirectly via resolve_backend
     build_backend_cmd() {
         local model="$1"
@@ -47,9 +49,25 @@ backend_codex() {
     BACKEND_JQ_FLAGS=(-rs)
     BACKEND_JQ_FILTER='(map(select(.item.type == "agent_message")) | last | .item.text // null) // ([ .[] | select(.item.type == "command_execution" and .item.status == "completed") | "$ " + .item.command + "\n" + (.item.aggregated_output // "") ] | join("\n") | if . == "" then null else . end) // empty'
     BACKEND_STDIN_PROMPT=false
-    BACKEND_HINTS="- Use subagents for parallel search/read operations
+    BACKEND_HINTS='
+## Output Quality Requirements
+
+Every task must be implementation-ready. A developer must be able to code from this plan without re-reading specs.
+Include exact file paths, field names/types/decorators, method signatures, and which spec (US/BR/NFR) each task satisfies.
+Do NOT use vague language like "add appropriate fields" — be specific or flag it as an open question.
+
+### Required Sections for Plan Items
+1. **Resolved Open Questions** — Ambiguities found, with your resolution
+2. **Implementation Tasks** — Phased, numbered (`1.1`), `- [ ]` checkboxes. Order: schema → shared types → backend → frontend → tests → seed data
+3. **Architectural Decisions** — What, why, and what you rejected
+4. **Accepted Exceptions** — `| Rule | Exception | Rationale |` table
+5. **Spec Traceability** — Table mapping every US/BR/NFR to task numbers
+6. **Implementation Order Rationale** — Dependencies and parallelism
+
+HINTS:
+- Use subagents for parallel search/read operations
 - Commit changes using git commands directly
-- Read \`AGENTS.md\` or \`CLAUDE.md\` (if present) for project-specific guidance"
+- Read AGENTS.md for project-specific guidance'
     # shellcheck disable=SC2317,SC2329  # Invoked indirectly via resolve_backend
     build_backend_cmd() {
         local model="$1"
