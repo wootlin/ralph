@@ -28,7 +28,12 @@ backend_claude() {
     BACKEND_JQ_FLAGS=(-r)
     BACKEND_JQ_FILTER='select(.type == "result") | .result // empty'
     BACKEND_STDIN_PROMPT=true
-    read -r -d '' BACKEND_HINTS <<'HINTS_EOF' || true
+    read -r -d '' BACKEND_HINTS_PLAN <<'HINTS_EOF' || true
+- Use the /commit skill if available, otherwise use git commands directly
+- Use **Sonnet** subagents for search/read, **Opus** subagents for complex reasoning
+- Read AGENTS.md OR CLAUDE.md for project-specific guidance
+HINTS_EOF
+    read -r -d '' BACKEND_HINTS_BUILD <<'HINTS_EOF' || true
 - Use the /commit skill if available, otherwise use git commands directly
 - Use **Sonnet** subagents for search/read, **Opus** subagents for complex reasoning
 - Read AGENTS.md OR CLAUDE.md for project-specific guidance
@@ -50,7 +55,7 @@ backend_codex() {
     BACKEND_JQ_FLAGS=(-rs)
     BACKEND_JQ_FILTER='(map(select(.item.type == "agent_message")) | last | .item.text // null) // ([ .[] | select(.item.type == "command_execution" and .item.status == "completed") | "$ " + .item.command + "\n" + (.item.aggregated_output // "") ] | join("\n") | if . == "" then null else . end) // empty'
     BACKEND_STDIN_PROMPT=false
-    read -r -d '' BACKEND_HINTS <<'HINTS_EOF' || true
+    read -r -d '' BACKEND_HINTS_PLAN <<'HINTS_EOF' || true
 ## Output Quality Requirements
 
 Every task must be implementation-ready. A developer must be able to code from this plan without re-reading specs.
@@ -66,6 +71,11 @@ Do NOT use vague language like "add appropriate fields" — be specific or flag 
 6. **Implementation Order Rationale** — Dependencies and parallelism
 
 HINTS:
+- Use subagents for parallel search/read operations
+- Commit changes using git commands directly
+- Read AGENTS.md for project-specific guidance
+HINTS_EOF
+    read -r -d '' BACKEND_HINTS_BUILD <<'HINTS_EOF' || true
 - Use subagents for parallel search/read operations
 - Commit changes using git commands directly
 - Read AGENTS.md for project-specific guidance
@@ -520,7 +530,13 @@ cmd_loop() {
     local prompt_rendered
     prompt_rendered=$(<"$prompt_file")
     prompt_rendered="${prompt_rendered//\{\{GOAL\}\}/${goal:-No specific goal provided}}"
-    prompt_rendered="${prompt_rendered//\{\{BACKEND_HINTS\}\}/${BACKEND_HINTS}}"
+    local hints
+    if [[ "$mode" == "plan" ]]; then
+        hints="$BACKEND_HINTS_PLAN"
+    else
+        hints="$BACKEND_HINTS_BUILD"
+    fi
+    prompt_rendered="${prompt_rendered//\{\{BACKEND_HINTS\}\}/${hints}}"
 
     local divider
     divider=$(printf '━%.0s' $(seq 1 $((64 + ${#max_iterations}))))
