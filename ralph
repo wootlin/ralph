@@ -487,16 +487,24 @@ cmd_loop() {
     # Build the backend command array now that model is resolved
     build_backend_cmd "$model"
 
+    # Build the rendered prompt once (same every iteration) so it can be shown in the header
+    local prompt_rendered
+    prompt_rendered=$(<"$prompt_file")
+    prompt_rendered="${prompt_rendered//\{\{GOAL\}\}/${goal:-No specific goal provided}}"
+    prompt_rendered="${prompt_rendered//\{\{BACKEND_HINTS\}\}/${BACKEND_HINTS}}"
+
     local divider
     divider=$(printf '━%.0s' $(seq 1 $((64 + ${#max_iterations}))))
     echo "$divider"
     echo "Mode:    $mode"
     echo "Backend: $BACKEND_NAME"
-    echo "Prompt:  $prompt_file"
+    echo "Template: $prompt_file"
     echo "Branch:  $current_branch"
     echo "Model:   $model"
     echo "Max:     $max_iterations iterations"
     [[ -n "$goal" ]] && echo "Goal:    $goal"
+    echo "Prompt:"
+    echo "$prompt_rendered"
     echo "$divider"
 
     # Permission handling:
@@ -519,11 +527,7 @@ cmd_loop() {
         iteration=$((iteration + 1))
         echo -e "\n======================== ITERATION $iteration / $max_iterations ========================\n"
 
-        # Inject {{GOAL}} and {{BACKEND_HINTS}} into prompt using bash substitution
-        local prompt
-        prompt=$(<"$prompt_file")
-        prompt="${prompt//\{\{GOAL\}\}/${goal:-No specific goal provided}}"
-        prompt="${prompt//\{\{BACKEND_HINTS\}\}/${BACKEND_HINTS}}"
+        local prompt="$prompt_rendered"
 
         if $dry_run; then
             if [[ "$BACKEND_STDIN_PROMPT" == "true" ]]; then
