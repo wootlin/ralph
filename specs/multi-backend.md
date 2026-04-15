@@ -37,7 +37,7 @@ There is no auto-detection. If an unrecognised backend name is given, ralph exit
 
 ### Prompt templates
 
-The prompts (`prompts/plan.md` and `prompts/build.md`) should be backend-agnostic. Claude-specific references (Sonnet/Opus subagents, `/commit` skill) are replaced with generic language. A `{{BACKEND_HINTS}}` placeholder is injected at runtime with backend-specific guidance so each backend gets relevant advice without duplicating the entire prompt.
+The prompts (`prompts/plan.md` and `prompts/build.md`) should be backend-agnostic. Claude-specific references (Sonnet/Opus subagents, `/commit` skill) are replaced with generic language.
 
 References to `CLAUDE.md` become `AGENTS.md` or `CLAUDE.md` (check for either).
 

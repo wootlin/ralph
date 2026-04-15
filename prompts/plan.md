@@ -47,7 +47,3 @@ Create or update `IMPLEMENTATION_PLAN.md`:
 - **Plan only. Do NOT implement anything.**
 - Never assume functionality is missing — confirm with code search first
 - If you create a new spec, document the plan to implement it in `IMPLEMENTATION_PLAN.md`
-
-## Backend-Specific Guidance
-
-{{BACKEND_HINTS}}

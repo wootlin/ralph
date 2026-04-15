@@ -57,7 +57,3 @@ Once tests pass:
 - **Document the why** — in tests, commits, and documentation, capture importance and reasoning.
 - **Keep `IMPLEMENTATION_PLAN.md` current** — future iterations depend on it to avoid duplicating effort.
 - For any bugs you notice, resolve them or document them in `IMPLEMENTATION_PLAN.md`, even if unrelated to the current item.
-
-## Backend-Specific Guidance
-
-{{BACKEND_HINTS}}

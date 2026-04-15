@@ -42,7 +42,7 @@ Ralph is a single Bash script (`ralph`) with these commands:
 1. Validate CLI dependencies (selected backend's CLI binary, git)
 2. Resolve backend via `-b` flag (default: `claude`), which loads the backend's command builder, default model, and jq filter
 3. Resolve prompt template: project-local `PROMPT_<mode>.md` → installed default (`~/.config/ralph/prompts/`)
-4. Substitute `{{GOAL}}` and `{{BACKEND_HINTS}}` into prompt via bash parameter expansion
+4. Substitute `{{GOAL}}` into prompt via bash parameter expansion
 5. Pipe prompt to the backend command in a loop (e.g., `claude -p` or `codex exec`)
 6. Parse JSON output with jq using backend-specific flags and filters, push changes after each iteration
 
