@@ -28,16 +28,8 @@ backend_claude() {
     BACKEND_JQ_FLAGS=(-r)
     BACKEND_JQ_FILTER='select(.type == "result") | .result // empty'
     BACKEND_STDIN_PROMPT=true
-    read -r -d '' BACKEND_HINTS_PLAN <<'HINTS_EOF' || true
-- Use the /commit skill if available, otherwise use git commands directly
-- Use **Sonnet** subagents for search/read, **Opus** subagents for complex reasoning
-- Read AGENTS.md OR CLAUDE.md for project-specific guidance
-HINTS_EOF
-    read -r -d '' BACKEND_HINTS_BUILD <<'HINTS_EOF' || true
-- Use the /commit skill if available, otherwise use git commands directly
-- Use **Sonnet** subagents for search/read, **Opus** subagents for complex reasoning
-- Read AGENTS.md OR CLAUDE.md for project-specific guidance
-HINTS_EOF
+    BACKEND_HINTS="- Use **Sonnet** subagents for search/read, **Opus** subagents for complex reasoning
+- Read \`CLAUDE.md\` (if present) for project-specific guidance"
     # shellcheck disable=SC2317,SC2329  # Invoked indirectly via resolve_backend
     build_backend_cmd() {
         local model="$1"
@@ -55,38 +47,13 @@ backend_codex() {
     BACKEND_JQ_FLAGS=(-rs)
     BACKEND_JQ_FILTER='(map(select(.item.type == "agent_message")) | last | .item.text // null) // ([ .[] | select(.item.type == "command_execution" and .item.status == "completed") | "$ " + .item.command + "\n" + (.item.aggregated_output // "") ] | join("\n") | if . == "" then null else . end) // empty'
     BACKEND_STDIN_PROMPT=false
-    read -r -d '' BACKEND_HINTS_PLAN <<'HINTS_EOF' || true
-## Output Quality Requirements
-
-Every task must be implementation-ready. A developer must be able to code from this plan without re-reading specs.
-Include exact file paths, field names/types/decorators, method signatures, and which spec (US/BR/NFR) each task satisfies.
-Do NOT use vague language like "add appropriate fields" — be specific or flag it as an open question.
-
-### Required Sections for Plan Items
-1. **Resolved Open Questions** — Ambiguities found, with your resolution
-2. **Implementation Tasks** — Phased, numbered (`1.1`), `- [ ]` checkboxes. Order: schema → shared types → backend → frontend → tests → seed data
-3. **Architectural Decisions** — What, why, and what you rejected
-4. **Accepted Exceptions** — `| Rule | Exception | Rationale |` table
-5. **Spec Traceability** — Table mapping every US/BR/NFR to task numbers
-6. **Implementation Order Rationale** — Dependencies and parallelism
-
-HINTS:
-- Use subagents for parallel search/read operations
+    BACKEND_HINTS="- Use subagents for parallel search/read operations
 - Commit changes using git commands directly
-- Read AGENTS.md for project-specific guidance
-HINTS_EOF
-    read -r -d '' BACKEND_HINTS_BUILD <<'HINTS_EOF' || true
-- Use subagents for parallel search/read operations
-- Commit changes using git commands directly
-- Read AGENTS.md for project-specific guidance
-HINTS_EOF
+- Read \`AGENTS.md\` or \`CLAUDE.md\` (if present) for project-specific guidance"
     # shellcheck disable=SC2317,SC2329  # Invoked indirectly via resolve_backend
     build_backend_cmd() {
         local model="$1"
         BACKEND_CMD=(codex exec "$BACKEND_PERMISSION_FLAG" --json --model "$model")
-        if [[ -n "${reasoning_effort:-}" ]]; then
-            BACKEND_CMD+=(--config "model_reasoning_effort=$reasoning_effort")
-        fi
     }
 }
 
@@ -140,8 +107,6 @@ Options:
   -g, --goal TEXT      Goal to inject into the prompt template
   -m, --model MODEL    Model to use (default depends on backend)
   -b, --backend NAME   Backend to use (default: claude)
-      --reasoning-effort LEVEL  Reasoning effort for codex backend in plan mode
-                               (minimal|low|medium|high|xhigh; default: high)
       --skip-push      Don't push after each iteration
       --dry-run        Print what would be executed without running
   -v, --verbose        Show backend commands, raw output, and exit codes
@@ -371,8 +336,8 @@ cmd_sandbox() {
     local up_args=(
         "--workspace-folder" "$PWD"
         "--config" "$config"
-        ${mount_flags[@]+"${mount_flags[@]}"}
-        ${ssh_env[@]+"${ssh_env[@]}"}
+        "${mount_flags[@]}"
+        "${ssh_env[@]}"
     )
     if $rebuild; then
         up_args+=("--remove-existing-container" "--build-no-cache")
@@ -385,7 +350,7 @@ cmd_sandbox() {
     devcontainer exec \
         --workspace-folder "$PWD" \
         --config "$config" \
-        ${ssh_env[@]+"${ssh_env[@]}"} \
+        "${ssh_env[@]}" \
         zsh
 }
 
@@ -435,12 +400,11 @@ cmd_loop() {
     local goal=""
     local model=""
     local backend=""
-    local reasoning_effort=""
     local skip_push=false
     local dry_run=false
     local verbose=false
 
-    ARGS=$(getopt -o n:g:m:b:vh --long iterations:,goal:,model:,backend:,reasoning-effort:,skip-push,dry-run,verbose,help -n 'ralph' -- "$@")
+    ARGS=$(getopt -o n:g:m:b:vh --long iterations:,goal:,model:,backend:,skip-push,dry-run,verbose,help -n 'ralph' -- "$@")
     eval set -- "$ARGS"
 
     while true; do
@@ -448,9 +412,8 @@ cmd_loop() {
             -n|--iterations) max_iterations="$2"; shift 2 ;;
             -g|--goal)       goal="$2";           shift 2 ;;
             -m|--model)      model="$2";          shift 2 ;;
-            -b|--backend)         backend="$2";          shift 2 ;;
-            --reasoning-effort)   reasoning_effort="$2"; shift 2 ;;
-            --skip-push)          skip_push=true;        shift ;;
+            -b|--backend)    backend="$2";        shift 2 ;;
+            --skip-push)     skip_push=true;      shift ;;
             --dry-run)       dry_run=true;        shift ;;
             -v|--verbose)    verbose=true;        shift ;;
             -h|--help)       usage ;;
@@ -461,26 +424,6 @@ cmd_loop() {
     # Resolve backend: CLI flag > default
     backend="${backend:-claude}"
     resolve_backend "$backend"
-
-    # Validate --reasoning-effort: only valid for codex, values are a fixed set
-    if [[ -n "$reasoning_effort" ]]; then
-        case "$reasoning_effort" in
-            minimal|low|medium|high|xhigh) ;;
-            *)
-                echo "Error: --reasoning-effort must be one of: minimal, low, medium, high, xhigh (got '$reasoning_effort')" >&2
-                exit 1
-                ;;
-        esac
-        if [[ "$BACKEND_NAME" != "codex" ]]; then
-            echo "Warning: --reasoning-effort is only supported by the codex backend (current: $BACKEND_NAME), ignoring" >&2
-            reasoning_effort=""
-        fi
-    fi
-
-    # Default reasoning effort for codex plan mode
-    if [[ "$BACKEND_NAME" == "codex" && "$mode" == "plan" && -z "$reasoning_effort" ]]; then
-        reasoning_effort="high"
-    fi
 
     # Apply backend default model if -m not explicitly passed
     if [[ -z "$model" ]]; then
@@ -526,32 +469,15 @@ cmd_loop() {
     # Build the backend command array now that model is resolved
     build_backend_cmd "$model"
 
-    # Build the rendered prompt once (same every iteration) so it can be shown in the header
-    local prompt_rendered
-    prompt_rendered=$(<"$prompt_file")
-    prompt_rendered="${prompt_rendered//\{\{GOAL\}\}/${goal:-No specific goal provided}}"
-    local hints
-    if [[ "$mode" == "plan" ]]; then
-        hints="$BACKEND_HINTS_PLAN"
-    else
-        hints="$BACKEND_HINTS_BUILD"
-    fi
-    prompt_rendered="${prompt_rendered//\{\{BACKEND_HINTS\}\}/${hints}}"
-
-    local divider
-    divider=$(printf '━%.0s' $(seq 1 $((64 + ${#max_iterations}))))
-    echo "$divider"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "Mode:    $mode"
     echo "Backend: $BACKEND_NAME"
-    echo "Template: $prompt_file"
+    echo "Prompt:  $prompt_file"
     echo "Branch:  $current_branch"
     echo "Model:   $model"
-    [[ -n "$reasoning_effort" ]] && echo "Reasoning: $reasoning_effort"
     echo "Max:     $max_iterations iterations"
     [[ -n "$goal" ]] && echo "Goal:    $goal"
-    echo "Prompt:"
-    echo "$prompt_rendered"
-    echo "$divider"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
     # Permission handling:
     #   Backends run non-interactively and cannot prompt for tool approval,
@@ -573,7 +499,11 @@ cmd_loop() {
         iteration=$((iteration + 1))
         echo -e "\n======================== ITERATION $iteration / $max_iterations ========================\n"
 
-        local prompt="$prompt_rendered"
+        # Inject {{GOAL}} and {{BACKEND_HINTS}} into prompt using bash substitution
+        local prompt
+        prompt=$(<"$prompt_file")
+        prompt="${prompt//\{\{GOAL\}\}/${goal:-No specific goal provided}}"
+        prompt="${prompt//\{\{BACKEND_HINTS\}\}/${BACKEND_HINTS}}"
 
         if $dry_run; then
             if [[ "$BACKEND_STDIN_PROMPT" == "true" ]]; then
