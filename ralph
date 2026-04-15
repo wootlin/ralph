@@ -444,7 +444,10 @@ cmd_loop() {
     fi
 
     # Resolve iteration count: -n flag overrides, otherwise use defaults/heuristics
-    if [[ -z "$max_iterations" ]]; then
+    local hard_override=false
+    if [[ -n "$max_iterations" ]]; then
+        hard_override=true
+    else
         case "$mode" in
             plan)  max_iterations=$PLAN_DEFAULT_CAP ;;
             build) max_iterations=$(calculate_build_iterations) ;;
@@ -504,6 +507,7 @@ cmd_loop() {
     fi
 
     local iteration=0
+    local consecutive_noops=0
 
     # Clean exit on interrupt signals
     trap 'echo -e "\nInterrupted at iteration $iteration / $max_iterations" >&2; exit 130' SIGINT SIGTERM
@@ -511,6 +515,10 @@ cmd_loop() {
     while [[ $iteration -lt $max_iterations ]]; do
         iteration=$((iteration + 1))
         echo -e "\n======================== ITERATION $iteration / $max_iterations ========================\n"
+
+        # Snapshot HEAD to detect noops
+        local head_before
+        head_before=$(git rev-parse HEAD)
 
         # Inject {{GOAL}} into prompt using bash substitution
         local prompt
@@ -613,6 +621,21 @@ cmd_loop() {
             elif $verbose; then
                 echo "[verbose] Push output:" >&2
                 echo "$push_output" >&2
+            fi
+        fi
+
+        # Noop detection: exit early after 2 consecutive noops (unless -n was passed)
+        if ! $hard_override && ! $dry_run; then
+            local head_after
+            head_after=$(git rev-parse HEAD)
+            if [[ "$head_before" == "$head_after" ]]; then
+                consecutive_noops=$((consecutive_noops + 1))
+                if [[ $consecutive_noops -ge 2 ]]; then
+                    echo -e "\nNo changes detected for 2 consecutive iterations — exiting early."
+                    break
+                fi
+            else
+                consecutive_noops=0
             fi
         fi
     done

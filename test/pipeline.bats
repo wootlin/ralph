@@ -331,3 +331,71 @@ MOCK
     [[ "$status" -eq 0 ]]
     [[ "$output" == *"[verbose] Backend command: claude"* ]]
 }
+
+# --- Noop early exit ---
+
+@test "build exits early after 2 consecutive noops" {
+    "$RALPH" init
+    # 5 items = 6 calculated iterations (with 20% headroom)
+    for i in 1 2 3 4 5; do
+        echo "- [ ] **Task $i**" >> IMPLEMENTATION_PLAN.md
+    done
+    mkdir -p "$TEST_DIR/bin"
+    # Mock backend that succeeds but never commits
+    cat > "$TEST_DIR/bin/claude" <<'MOCK'
+#!/usr/bin/env bash
+echo '{"type":"result","result":"nothing to do"}'
+MOCK
+    chmod +x "$TEST_DIR/bin/claude"
+
+    PATH="$TEST_DIR/bin:$PATH" run "$RALPH" build --skip-push
+    [[ "$status" -eq 0 ]]
+    [[ "$output" == *"No changes detected for 2 consecutive iterations"* ]]
+    [[ "$output" == *"Completed 2 iterations"* ]]
+}
+
+@test "noop counter resets when a commit occurs" {
+    "$RALPH" init
+    # 3 items = 4 calculated iterations
+    for i in 1 2 3; do
+        echo "- [ ] **Task $i**" >> IMPLEMENTATION_PLAN.md
+    done
+    mkdir -p "$TEST_DIR/bin"
+    # Mock backend: noop on iteration 1, commit on iteration 2, noop on 3 and 4
+    cat > "$TEST_DIR/bin/claude" <<MOCK
+#!/usr/bin/env bash
+CALL_LOG="$TEST_DIR/call_count"
+count=0
+[[ -f "\$CALL_LOG" ]] && count=\$(cat "\$CALL_LOG")
+count=\$((count + 1))
+echo "\$count" > "\$CALL_LOG"
+if [[ "\$count" -eq 2 ]]; then
+    git commit --allow-empty -m "work done" --quiet
+fi
+echo '{"type":"result","result":"done"}'
+MOCK
+    chmod +x "$TEST_DIR/bin/claude"
+
+    PATH="$TEST_DIR/bin:$PATH" run "$RALPH" build --skip-push
+    [[ "$status" -eq 0 ]]
+    # Should run: noop(1), commit(2), noop(3), noop(4)=early exit
+    [[ "$output" == *"No changes detected for 2 consecutive iterations"* ]]
+    [[ "$output" == *"ITERATION 4"* ]]
+}
+
+@test "noop detection is disabled when -n is passed" {
+    "$RALPH" init
+    echo "- [ ] **Task one**" > IMPLEMENTATION_PLAN.md
+    mkdir -p "$TEST_DIR/bin"
+    # Mock backend that succeeds but never commits
+    cat > "$TEST_DIR/bin/claude" <<'MOCK'
+#!/usr/bin/env bash
+echo '{"type":"result","result":"nothing to do"}'
+MOCK
+    chmod +x "$TEST_DIR/bin/claude"
+
+    PATH="$TEST_DIR/bin:$PATH" run "$RALPH" build -n 3 --skip-push
+    [[ "$status" -eq 0 ]]
+    [[ "$output" != *"No changes detected"* ]]
+    [[ "$output" == *"Completed 3 iterations"* ]]
+}
