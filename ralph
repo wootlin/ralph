@@ -4,9 +4,8 @@ set -euo pipefail
 VERSION="0.1.0"
 CONFIG_DIR="${RALPH_CONFIG_DIR:-$HOME/.config/ralph}"
 
-# Default caps prevent runaway loops
+# Default cap for plan mode (build mode calculates from the plan)
 PLAN_DEFAULT_CAP=3
-BUILD_DEFAULT_CAP=50
 
 ARTIFACTS=(IMPLEMENTATION_PLAN.md PROGRESS.md PROMPT_plan.md PROMPT_build.md)
 ARCHIVE_DIR=".ralph"
@@ -385,6 +384,26 @@ resolve_prompt() {
     fi
 }
 
+# Calculate build iterations from IMPLEMENTATION_PLAN.md.
+# Counts incomplete items (- [ ]) and adds 20% headroom (rounded up, minimum 1).
+calculate_build_iterations() {
+    if [[ ! -f "IMPLEMENTATION_PLAN.md" ]]; then
+        echo "Error: IMPLEMENTATION_PLAN.md not found. Run 'ralph plan' first." >&2
+        exit 1
+    fi
+
+    local count
+    count=$(grep -c '^\- \[ \]' "IMPLEMENTATION_PLAN.md" || true)
+
+    if [[ "$count" -eq 0 ]]; then
+        echo "Error: no incomplete items in IMPLEMENTATION_PLAN.md. Run 'ralph plan' first." >&2
+        exit 1
+    fi
+
+    # 20% headroom, rounded up: ceil(count * 1.2)
+    echo $(( (count * 6 + 4) / 5 ))
+}
+
 cmd_loop() {
     local mode="$1"
     shift
@@ -424,11 +443,11 @@ cmd_loop() {
         model="$BACKEND_DEFAULT_MODEL"
     fi
 
-    # Apply default iteration cap based on mode
+    # Resolve iteration count: -n flag overrides, otherwise use defaults/heuristics
     if [[ -z "$max_iterations" ]]; then
         case "$mode" in
-            plan)  max_iterations=$PLAN_DEFAULT_CAP  ;;
-            build) max_iterations=$BUILD_DEFAULT_CAP ;;
+            plan)  max_iterations=$PLAN_DEFAULT_CAP ;;
+            build) max_iterations=$(calculate_build_iterations) ;;
         esac
     fi
 
