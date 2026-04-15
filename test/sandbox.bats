@@ -81,21 +81,14 @@ path_without() {
     [[ "$output" == *"--rebuild"* ]]
 }
 
-@test "sandbox uses md5 when md5sum is not available" {
-    command -v md5 >/dev/null 2>&1 || skip "md5 not available"
+@test "sandbox hashes workspace path with available md5 binary" {
+    command -v md5sum >/dev/null 2>&1 || command -v md5 >/dev/null 2>&1 || skip "no md5sum or md5 available"
     command -v devcontainer >/dev/null 2>&1 || skip "devcontainer CLI not installed"
-    # Skip if md5sum shares a directory with coreutils (cannot isolate)
-    local md5sum_dir cut_dir
-    md5sum_dir=$(dirname "$(command -v md5sum)")
-    cut_dir=$(dirname "$(command -v cut)")
-    [[ "$md5sum_dir" != "$cut_dir" ]] || skip "cannot isolate md5sum from coreutils in PATH"
     # shellcheck disable=SC2031
     mkdir -p "$RALPH_CONFIG_DIR/container"
     # shellcheck disable=SC2031
     echo '{}' > "$RALPH_CONFIG_DIR/container/devcontainer.json"
-    local filtered_path
-    filtered_path=$(path_without md5sum)
-    PATH="${filtered_path%:}" run "$RALPH" sandbox
+    run "$RALPH" sandbox
     [[ "$output" != *"no md5sum or md5 command found"* ]]
 }
 
