@@ -113,7 +113,7 @@ Ralph looks for prompts in this order:
 1. **Project-local** — `PROMPT_plan.md` / `PROMPT_build.md` in the working directory
 2. **Installed defaults** — `~/.config/ralph/prompts/plan.md` / `build.md`
 
-Run `ralph init --prompts` to copy the defaults into your project for customisation.
+The default prompts reference Anthropic model names (Sonnet, Opus) for subagent selection. If you're using a non-Claude backend, run `ralph init --prompts` to copy the defaults into your project and edit them to suit your backend.
 
 ## Project artifacts
 
