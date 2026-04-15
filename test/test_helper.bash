@@ -17,6 +17,7 @@ setup() {
     export RALPH_CONFIG_DIR="$TEST_DIR/.ralph-config"
     mkdir -p "$RALPH_CONFIG_DIR/templates" "$RALPH_CONFIG_DIR/prompts"
     echo "# Progress" > "$RALPH_CONFIG_DIR/templates/PROGRESS.md"
+    echo "# Implementation Plan" > "$RALPH_CONFIG_DIR/templates/IMPLEMENTATION_PLAN.md"
     echo "# Plan prompt" > "$RALPH_CONFIG_DIR/prompts/plan.md"
     echo "# Build prompt" > "$RALPH_CONFIG_DIR/prompts/build.md"
 }

@@ -188,11 +188,10 @@ cmd_init() {
         echo "Warning: PROGRESS.md template not found at $templates_dir"
     fi
 
-    if [[ -f "IMPLEMENTATION_PLAN.md" ]]; then
-        echo "Skipped: IMPLEMENTATION_PLAN.md already exists"
+    if [[ -f "$templates_dir/IMPLEMENTATION_PLAN.md" ]]; then
+        scaffold "IMPLEMENTATION_PLAN.md" "$templates_dir/IMPLEMENTATION_PLAN.md"
     else
-        touch "IMPLEMENTATION_PLAN.md"
-        echo "Created: IMPLEMENTATION_PLAN.md"
+        echo "Warning: IMPLEMENTATION_PLAN.md template not found at $templates_dir"
     fi
 
     if [[ -d "specs" ]]; then
