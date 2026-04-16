@@ -404,6 +404,15 @@ calculate_build_iterations() {
     echo $(( (count * 6 + 4) / 5 ))
 }
 
+truncate_line() {
+    local text="$1" max="$2"
+    if [[ ${#text} -gt $max ]]; then
+        echo "${text:0:$((max - 3))}..."
+    else
+        echo "$text"
+    fi
+}
+
 cmd_loop() {
     local mode="$1"
     shift
@@ -485,24 +494,28 @@ cmd_loop() {
     # Build the backend command array now that model is resolved
     build_backend_cmd "$model"
 
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    local line_width=120
+    local bar
+    bar=$(printf '%*s' "$line_width" '' | tr ' ' '━')
+
+    echo "$bar"
     echo "Mode:    $mode"
     echo "Backend: $BACKEND_NAME"
-    echo "Prompt:  $prompt_file"
+    truncate_line "Prompt:  $prompt_file" "$line_width"
     echo "Branch:  $current_branch"
     echo "Model:   $model"
     echo "Max:     $max_iterations iterations"
-    [[ -n "$goal" ]] && echo "Goal:    $goal"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    [[ -n "$goal" ]] && truncate_line "Goal:    $goal" "$line_width"
+    echo "$bar"
 
     # Permission handling:
     #   Backends run non-interactively and cannot prompt for tool approval,
     #   so the backend's permission flag is always required.
     #   Inside a devcontainer, network isolation provides additional safety.
     if [[ "${DEVCONTAINER:-false}" != "true" ]]; then
-        echo "⚠️  WARNING: Running with $BACKEND_PERMISSION_FLAG outside a container." >&2
-        echo "⚠️  $BACKEND_PERMISSION_WARNING" >&2
-        echo "⚠️  For safer execution, use the provided devcontainer." >&2
+        truncate_line "⚠️  WARNING: Running with $BACKEND_PERMISSION_FLAG outside a container." "$line_width" >&2
+        truncate_line "⚠️  $BACKEND_PERMISSION_WARNING" "$line_width" >&2
+        truncate_line "⚠️  For safer execution, use the provided devcontainer." "$line_width" >&2
         echo "" >&2
     fi
 
@@ -514,7 +527,14 @@ cmd_loop() {
 
     while [[ $iteration -lt $max_iterations ]]; do
         iteration=$((iteration + 1))
-        echo -e "\n======================== ITERATION $iteration / $max_iterations ========================\n"
+        local iter_label=" ITERATION $iteration / $max_iterations "
+        local pad_total=$((line_width - ${#iter_label}))
+        local pad_left=$((pad_total / 2))
+        local pad_right=$((pad_total - pad_left))
+        printf '\n%s%s%s\n\n' \
+            "$(printf '%*s' "$pad_left" '' | tr ' ' '=')" \
+            "$iter_label" \
+            "$(printf '%*s' "$pad_right" '' | tr ' ' '=')"
 
         # Snapshot HEAD to detect noops
         local head_before
