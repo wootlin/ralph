@@ -496,7 +496,7 @@ cmd_loop() {
 
     local line_width=120
     local bar
-    bar=$(printf '%*s' "$line_width" '' | tr ' ' '━')
+    bar=$(printf '━%.0s' $(seq 1 "$line_width"))
 
     echo "$bar"
     echo "Mode:    $mode"
