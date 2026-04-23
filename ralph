@@ -384,14 +384,34 @@ resolve_prompt() {
     fi
 }
 
-# Calculate build iterations from IMPLEMENTATION_PLAN.md.
-# Counts incomplete items (- [ ]) and adds 20% headroom (rounded up, minimum 1).
-calculate_build_iterations() {
-    if [[ ! -f "IMPLEMENTATION_PLAN.md" ]]; then
-        echo "Error: IMPLEMENTATION_PLAN.md not found. Run 'ralph plan' first." >&2
+# Verify workspace artifacts produced by 'ralph init' are present.
+# Plan needs IMPLEMENTATION_PLAN.md (the template the agent fills in).
+# Build needs both IMPLEMENTATION_PLAN.md and PROGRESS.md.
+require_init_artifacts() {
+    local mode="$1"
+    local required=()
+
+    case "$mode" in
+        plan)  required=(IMPLEMENTATION_PLAN.md) ;;
+        build) required=(IMPLEMENTATION_PLAN.md PROGRESS.md) ;;
+    esac
+
+    local missing=()
+    for f in "${required[@]}"; do
+        [[ -f "$f" ]] || missing+=("$f")
+    done
+
+    if [[ ${#missing[@]} -gt 0 ]]; then
+        echo "Error: missing workspace artifacts required for '$mode': ${missing[*]}" >&2
+        echo "Run 'ralph init' to scaffold them before running 'ralph $mode'." >&2
         exit 1
     fi
+}
 
+# Calculate build iterations from IMPLEMENTATION_PLAN.md.
+# Counts incomplete items (- [ ]) and adds 20% headroom (rounded up, minimum 1).
+# Caller must ensure IMPLEMENTATION_PLAN.md exists (see require_init_artifacts).
+calculate_build_iterations() {
     local count
     count=$(grep -c '^\- \[ \]' "IMPLEMENTATION_PLAN.md" || true)
 
@@ -443,6 +463,21 @@ cmd_loop() {
         esac
     done
 
+    # Validate explicit -n value before any state-dependent work, so syntax
+    # errors fire regardless of workspace state.
+    local hard_override=false
+    if [[ -n "$max_iterations" ]]; then
+        if [[ ! "$max_iterations" =~ ^[1-9][0-9]*$ ]]; then
+            echo "Error: iterations must be a positive integer, got '$max_iterations'" >&2
+            exit 1
+        fi
+        hard_override=true
+    fi
+
+    # Fail fast if 'ralph init' hasn't been run — checked before any backend
+    # resolution, CLI lookup, or git work so the user gets immediate feedback.
+    require_init_artifacts "$mode"
+
     # Resolve backend: CLI flag > default
     backend="${backend:-claude}"
     resolve_backend "$backend"
@@ -452,21 +487,12 @@ cmd_loop() {
         model="$BACKEND_DEFAULT_MODEL"
     fi
 
-    # Resolve iteration count: -n flag overrides, otherwise use defaults/heuristics
-    local hard_override=false
-    if [[ -n "$max_iterations" ]]; then
-        hard_override=true
-    else
+    # Resolve iteration count from defaults/heuristics when -n wasn't passed.
+    if ! $hard_override; then
         case "$mode" in
             plan)  max_iterations=$PLAN_DEFAULT_CAP ;;
             build) max_iterations=$(calculate_build_iterations) ;;
         esac
-    fi
-
-    # Validate iterations is a positive integer
-    if [[ ! "$max_iterations" =~ ^[1-9][0-9]*$ ]]; then
-        echo "Error: iterations must be a positive integer, got '$max_iterations'" >&2
-        exit 1
     fi
 
     # Verify backend CLI is available (not needed for dry-run)

@@ -26,8 +26,9 @@ load test_helper
 }
 
 @test "build fails when claude is not in PATH" {
-    # Provide a plan so iteration calculation succeeds
+    # Provide init artifacts so iteration calculation succeeds
     echo "- [ ] **Task one**" > IMPLEMENTATION_PLAN.md
+    touch PROGRESS.md
     # Keep system paths but remove any directory containing claude
     local filtered_path
     filtered_path=$(echo "$PATH" | tr ':' '\n' | while read -r dir; do
@@ -39,8 +40,9 @@ load test_helper
 }
 
 @test "build -b codex fails when codex is not in PATH" {
-    # Provide a plan so iteration calculation succeeds
+    # Provide init artifacts so iteration calculation succeeds
     echo "- [ ] **Task one**" > IMPLEMENTATION_PLAN.md
+    touch PROGRESS.md
     # Codex is almost certainly not installed, so just verify the error names the right binary
     local filtered_path
     filtered_path=$(echo "$PATH" | tr ':' '\n' | while read -r dir; do
@@ -55,19 +57,41 @@ load test_helper
     command -v claude >/dev/null 2>&1 || skip "claude CLI not installed"
     cd "$(mktemp -d)" || return 1
     echo "- [ ] **Task one**" > IMPLEMENTATION_PLAN.md
+    touch PROGRESS.md
     run "$RALPH" build
     [[ "$status" -ne 0 ]]
     [[ "$output" == *"not inside a git repository"* ]]
 }
 
-@test "build fails without IMPLEMENTATION_PLAN.md" {
+@test "build fails without init artifacts" {
     run "$RALPH" build
     [[ "$status" -ne 0 ]]
-    [[ "$output" == *"IMPLEMENTATION_PLAN.md not found"* ]]
+    [[ "$output" == *"missing workspace artifacts required for 'build'"* ]]
+    [[ "$output" == *"IMPLEMENTATION_PLAN.md"* ]]
+    [[ "$output" == *"PROGRESS.md"* ]]
+    [[ "$output" == *"Run 'ralph init'"* ]]
+}
+
+@test "build fails when only IMPLEMENTATION_PLAN.md is present" {
+    echo "- [ ] **Task one**" > IMPLEMENTATION_PLAN.md
+    run "$RALPH" build
+    [[ "$status" -ne 0 ]]
+    [[ "$output" == *"missing workspace artifacts required for 'build'"* ]]
+    [[ "$output" == *"PROGRESS.md"* ]]
+    [[ "$output" == *"Run 'ralph init'"* ]]
+}
+
+@test "plan fails without IMPLEMENTATION_PLAN.md" {
+    run "$RALPH" plan
+    [[ "$status" -ne 0 ]]
+    [[ "$output" == *"missing workspace artifacts required for 'plan'"* ]]
+    [[ "$output" == *"IMPLEMENTATION_PLAN.md"* ]]
+    [[ "$output" == *"Run 'ralph init'"* ]]
 }
 
 @test "build fails with no incomplete items" {
     echo "- [x] **Completed task**" > IMPLEMENTATION_PLAN.md
+    touch PROGRESS.md
     run "$RALPH" build
     [[ "$status" -ne 0 ]]
     [[ "$output" == *"no incomplete items"* ]]
@@ -75,6 +99,7 @@ load test_helper
 
 @test "build -n overrides calculated iterations" {
     echo "- [ ] **Task one**" > IMPLEMENTATION_PLAN.md
+    touch PROGRESS.md
     run "$RALPH" build -n 10 --dry-run
     [[ "$status" -eq 0 ]]
     [[ "$output" == *"Max:     10 iterations"* ]]
@@ -85,6 +110,7 @@ load test_helper
     for i in 1 2 3 4 5; do
         echo "- [ ] **Task $i**" >> IMPLEMENTATION_PLAN.md
     done
+    touch PROGRESS.md
     run "$RALPH" build --dry-run
     [[ "$status" -eq 0 ]]
     [[ "$output" == *"Max:     6 iterations"* ]]
