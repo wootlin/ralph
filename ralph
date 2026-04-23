@@ -644,8 +644,9 @@ cmd_loop() {
             fi
         fi
 
-        # Noop detection: exit early after 2 consecutive noops (unless -n was passed)
-        if ! $hard_override && ! $dry_run; then
+        # Noop detection: exit early after 2 consecutive noops (build mode only, unless -n was passed).
+        # Plan mode doesn't produce commits (IMPLEMENTATION_PLAN.md is gitignored), so HEAD never advances.
+        if [[ "$mode" == "build" ]] && ! $hard_override && ! $dry_run; then
             local head_after
             head_after=$(git rev-parse HEAD)
             if [[ "$head_before" == "$head_after" ]]; then

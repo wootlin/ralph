@@ -399,3 +399,20 @@ MOCK
     [[ "$output" != *"No changes detected"* ]]
     [[ "$output" == *"Completed 3 iterations"* ]]
 }
+
+@test "plan runs full iteration count even when no commits occur" {
+    "$RALPH" init
+    mkdir -p "$TEST_DIR/bin"
+    # Plan iterations never commit (IMPLEMENTATION_PLAN.md is gitignored),
+    # so noop detection must not apply in plan mode.
+    cat > "$TEST_DIR/bin/claude" <<'MOCK'
+#!/usr/bin/env bash
+echo '{"type":"result","result":"planning"}'
+MOCK
+    chmod +x "$TEST_DIR/bin/claude"
+
+    PATH="$TEST_DIR/bin:$PATH" run "$RALPH" plan --skip-push
+    [[ "$status" -eq 0 ]]
+    [[ "$output" != *"No changes detected"* ]]
+    [[ "$output" == *"Completed 3 iterations"* ]]
+}
