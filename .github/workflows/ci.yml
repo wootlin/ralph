@@ -12,10 +12,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: ludeeus/action-shellcheck@master
-        with:
-          scandir: .
-          additional_files: ralph install.sh test/*.bats test/test_helper.bash
+      # action-shellcheck builds its file list with `find -name *<path>`, but
+      # `find -name` only matches basenames — so any pattern containing a slash
+      # (e.g. test/sandbox.bats) is silently skipped. Invoke shellcheck
+      # directly so the test files are actually checked.
+      - run: shellcheck --format=gcc ralph install.sh test/*.bats test/test_helper.bash
 
   test:
     name: BATS Tests

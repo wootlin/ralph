@@ -107,7 +107,11 @@ exit 0
 MOCKEOF
     chmod +x "$mock_bin/devcontainer"
     ln -s "$RALPH" "$mock_bin/ralph"
+    # RALPH_CONFIG_DIR is exported in setup() (test_helper.bash); BATS runs
+    # setup and the test body in the same subshell so the var is visible here.
+    # shellcheck disable=SC2031
     mkdir -p "$RALPH_CONFIG_DIR/container"
+    # shellcheck disable=SC2031
     echo '{}' > "$RALPH_CONFIG_DIR/container/devcontainer.json"
     export PATH="$mock_bin:$PATH"
     unset SSH_AUTH_SOCK
@@ -127,7 +131,7 @@ MOCKEOF
     unset OPENROUTER_API_KEY
     run "$RALPH" sandbox
     [[ "$status" -eq 0 ]]
-    ! grep -q "^OPENROUTER_API_KEY=" "$DEVCONTAINER_CALL_LOG"
+    run ! grep -q "^OPENROUTER_API_KEY=" "$DEVCONTAINER_CALL_LOG"
 }
 
 @test "sandbox propagates ANTHROPIC_BASE_URL when set" {
@@ -151,6 +155,8 @@ MOCKEOF
 @test "sandbox propagates ANTHROPIC_API_KEY when set" {
     setup_sandbox_mock
     unset ANTHROPIC_API_KEY
+    # Per-test export is intentional — BATS isolates each test in a subshell.
+    # shellcheck disable=SC2030
     export ANTHROPIC_API_KEY="sk-ant-key-123"
     run "$RALPH" sandbox
     [[ "$status" -eq 0 ]]
@@ -160,6 +166,7 @@ MOCKEOF
 @test "sandbox propagates ANTHROPIC_API_KEY even when set to empty string" {
     setup_sandbox_mock
     unset ANTHROPIC_API_KEY
+    # shellcheck disable=SC2031
     export ANTHROPIC_API_KEY=""
     run "$RALPH" sandbox
     [[ "$status" -eq 0 ]]
@@ -171,7 +178,7 @@ MOCKEOF
     unset ANTHROPIC_API_KEY
     run "$RALPH" sandbox
     [[ "$status" -eq 0 ]]
-    ! grep -q "^ANTHROPIC_API_KEY=" "$DEVCONTAINER_CALL_LOG"
+    run ! grep -q "^ANTHROPIC_API_KEY=" "$DEVCONTAINER_CALL_LOG"
 }
 
 @test "sandbox hash detection fails when no hashing command exists" {
