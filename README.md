@@ -149,6 +149,18 @@ ralph plan -g "New goal"
 
 Archived artifacts are stored under `.ralph/` in your project directory, organised by timestamp.
 
+## Commit conventions
+
+The build phase commits via the `/commit` skill bundled with ralph and scaffolded by `ralph init` into `.claude/skills/commit/SKILL.md`. The skill enforces an opinionated style:
+
+- **[Conventional Commits](https://www.conventionalcommits.org/)** — `<type>(<scope>): <short imperative subject>`
+- **Atomic** — separable concerns become separate commits, even within a single build iteration
+- **Selective staging** — only the paths belonging to the current commit are staged; never `git add -A`
+- **Optional short body** — up to 3 bulleted lines summarising what was implemented, only when the subject isn't self-explanatory
+- Loop-local artifacts (`IMPLEMENTATION_PLAN.md`, `PROGRESS.md`, `PROMPT_*.md`, `.ralph/`) are never staged
+
+The scaffolded skill lives in your project's `.claude/skills/` and is not gitignored by `ralph init` — commit it to share with your team, or edit it locally if you want different conventions.
+
 ## Permissions and safety
 
 Ralph runs backends in non-interactive pipe mode, which cannot prompt for tool approval. Each backend has its own permission-bypass flag (`--dangerously-skip-permissions` for Claude, `--dangerously-bypass-approvals-and-sandbox` for Codex), and ralph applies the appropriate one automatically.
