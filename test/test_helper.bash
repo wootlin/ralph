@@ -15,11 +15,12 @@ setup() {
 
     # Set up mock ralph config dir
     export RALPH_CONFIG_DIR="$TEST_DIR/.ralph-config"
-    mkdir -p "$RALPH_CONFIG_DIR/templates" "$RALPH_CONFIG_DIR/prompts"
+    mkdir -p "$RALPH_CONFIG_DIR/templates" "$RALPH_CONFIG_DIR/prompts" "$RALPH_CONFIG_DIR/skills/commit"
     echo "# Progress" > "$RALPH_CONFIG_DIR/templates/PROGRESS.md"
     echo "# Implementation Plan" > "$RALPH_CONFIG_DIR/templates/IMPLEMENTATION_PLAN.md"
     echo "# Plan prompt" > "$RALPH_CONFIG_DIR/prompts/plan.md"
     echo "# Build prompt" > "$RALPH_CONFIG_DIR/prompts/build.md"
+    echo "# commit skill" > "$RALPH_CONFIG_DIR/skills/commit/SKILL.md"
 }
 
 # Clean up after each test
