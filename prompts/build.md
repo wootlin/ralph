@@ -44,7 +44,11 @@ Once tests pass:
 
 1. Update `IMPLEMENTATION_PLAN.md` — mark the item complete, clean out stale completed items, add any new findings
 2. Append an entry to `PROGRESS.md` following the template defined in its header (append-only — never edit previous entries)
-3. Commit the changes — **do NOT stage or commit `IMPLEMENTATION_PLAN.md`, `PROGRESS.md`, `PROMPT_plan.md`, `PROMPT_build.md`, or the `.ralph/` directory**; these are local-only loop artifacts
+3. Commit the changes by invoking the **`/commit` skill**. Do NOT compose commits manually. Rules for this iteration:
+   - **Atomic commits**: if the working tree contains separable concerns (e.g. a refactor *and* the feature it enables, an unrelated bug fix you noticed along the way, or test additions that stand on their own), produce **multiple commits in one skill invocation** — one per concern — instead of a single grab-bag commit.
+   - **Selective staging**: never `git add -A` / `git add .`. Stage only the paths belonging to the current commit.
+   - **Exclude loop artifacts**: do NOT stage or commit `IMPLEMENTATION_PLAN.md`, `PROGRESS.md`, `PROMPT_plan.md`, `PROMPT_build.md`, or the `.ralph/` directory — these are local-only.
+   - **Subject + optional short body**: short imperative subject; body, if used, is up to 3 bulleted lines summarising what was implemented.
 4. `git push`
 
 ---
