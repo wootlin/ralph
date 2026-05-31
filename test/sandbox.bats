@@ -52,9 +52,11 @@ path_without() {
     # Simulate a submodule worktree: relocate the gitdir and replace .git
     # with a file containing a relative pointer (as `git submodule add` does).
     # The target must resolve so `git rev-parse --is-inside-work-tree` still
-    # succeeds — that's the realistic scenario we want to reject.
-    mv .git ../submodule-gitdir
-    echo "gitdir: ../submodule-gitdir" > .git
+    # succeeds — that's the realistic scenario we want to reject. Keep the
+    # relocated gitdir inside the temp workspace so teardown cleans it up;
+    # writing outside TEST_DIR leaks state and makes the test flaky.
+    mv .git submodule-gitdir
+    echo "gitdir: submodule-gitdir" > .git
     run "$RALPH" sandbox
     [[ "$status" -ne 0 ]]
     [[ "$output" == *"workspace is a git submodule"* ]]
