@@ -330,7 +330,10 @@ cmd_sandbox() {
             mounts+=("type=bind,source=$gpg_sock,target=/home/node/.gnupg/S.gpg-agent")
             gpg_home="$(gpgconf --list-dirs homedir 2>/dev/null)"
             if [[ -f "$gpg_home/pubring.kbx" ]]; then
-                mounts+=("type=bind,source=$gpg_home/pubring.kbx,target=/home/node/.gnupg/pubring.kbx,readonly")
+                # The devcontainer CLI's --mount only accepts type/source/target
+                # (and optional external); it rejects a `readonly` key, unlike
+                # the static mounts in devcontainer.json.
+                mounts+=("type=bind,source=$gpg_home/pubring.kbx,target=/home/node/.gnupg/pubring.kbx")
             fi
         fi
     fi

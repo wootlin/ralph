@@ -118,6 +118,22 @@ setup_sandbox_mock() {
 #!/usr/bin/env bash
 printf '%s\n' "$@" >> "$DEVCONTAINER_CALL_LOG"
 printf -- '---\n' >> "$DEVCONTAINER_CALL_LOG"
+# Validate --mount values like the real CLI: only type/source/target (and an
+# optional external) keys are accepted. Catches unsupported keys (e.g. readonly)
+# that the real devcontainer up would reject.
+prev=""
+for arg in "$@"; do
+    if [[ "$prev" == "--mount" ]]; then
+        IFS=',' read -ra parts <<< "$arg"
+        for part in "${parts[@]}"; do
+            case "${part%%=*}" in
+                type|source|target|external) ;;
+                *) echo "mock devcontainer: unsupported mount key in '$arg'" >&2; exit 2 ;;
+            esac
+        done
+    fi
+    prev="$arg"
+done
 exit 0
 MOCKEOF
     chmod +x "$mock_bin/devcontainer"
@@ -231,7 +247,7 @@ MOCKEOF
     run "$RALPH" sandbox
     [[ "$status" -eq 0 ]]
     grep -q "target=/home/node/.gnupg/S.gpg-agent$" "$DEVCONTAINER_CALL_LOG"
-    grep -q "target=/home/node/.gnupg/pubring.kbx,readonly$" "$DEVCONTAINER_CALL_LOG"
+    grep -q "target=/home/node/.gnupg/pubring.kbx$" "$DEVCONTAINER_CALL_LOG"
 }
 
 @test "sandbox falls back from extra socket to standard agent socket" {
