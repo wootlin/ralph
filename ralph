@@ -315,6 +315,24 @@ cmd_sandbox() {
         mounts+=("type=bind,source=$SSH_AUTH_SOCK,target=/tmp/ssh-agent.sock")
         ssh_env=("--remote-env" "SSH_AUTH_SOCK=/tmp/ssh-agent.sock")
     fi
+
+    # GPG agent forwarding — lets the build loop sign commits with the host key
+    # without copying any private key material into the container. The host
+    # gpg-agent holds the secret; the container's gpg reaches it over the
+    # forwarded socket and reads the mounted public keyring. Prefer the agent's
+    # restricted "extra" socket, falling back to the standard socket.
+    if command -v gpgconf >/dev/null 2>&1; then
+        local gpg_sock gpg_home
+        gpg_sock="$(gpgconf --list-dirs agent-extra-socket 2>/dev/null)"
+        [[ -S "$gpg_sock" ]] || gpg_sock="$(gpgconf --list-dirs agent-socket 2>/dev/null)"
+        if [[ -S "$gpg_sock" ]]; then
+            mounts+=("type=bind,source=$gpg_sock,target=/home/node/.gnupg/S.gpg-agent")
+            gpg_home="$(gpgconf --list-dirs homedir 2>/dev/null)"
+            if [[ -f "$gpg_home/pubring.kbx" ]]; then
+                mounts+=("type=bind,source=$gpg_home/pubring.kbx,target=/home/node/.gnupg/pubring.kbx,readonly")
+            fi
+        fi
+    fi
     if [[ -n "${OPENAI_API_KEY:-}" ]]; then
         ssh_env+=("--remote-env" "OPENAI_API_KEY=$OPENAI_API_KEY")
     fi
