@@ -47,6 +47,19 @@ path_without() {
     [[ "$output" == *"not inside a git repository"* ]]
 }
 
+@test "sandbox fails when workspace is a git submodule worktree" {
+    command -v devcontainer >/dev/null 2>&1 || skip "devcontainer CLI not installed"
+    # Simulate a submodule worktree: relocate the gitdir and replace .git
+    # with a file containing a relative pointer (as `git submodule add` does).
+    # The target must resolve so `git rev-parse --is-inside-work-tree` still
+    # succeeds — that's the realistic scenario we want to reject.
+    mv .git ../submodule-gitdir
+    echo "gitdir: ../submodule-gitdir" > .git
+    run "$RALPH" sandbox
+    [[ "$status" -ne 0 ]]
+    [[ "$output" == *"workspace is a git submodule"* ]]
+}
+
 @test "sandbox fails when config is missing" {
     command -v devcontainer >/dev/null 2>&1 || skip "devcontainer CLI not installed"
     # shellcheck disable=SC2030

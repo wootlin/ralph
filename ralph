@@ -270,6 +270,20 @@ cmd_sandbox() {
         exit 1
     fi
 
+    # A submodule worktree's `.git` is a file containing a relative gitdir
+    # pointer (e.g. `gitdir: ../../.git/modules/foo`). Bind-mounting the
+    # workspace at /workspace in the container leaves the pointer unchanged,
+    # so it resolves to a path that doesn't exist inside the container and
+    # every subsequent git command — including devcontainer's own
+    # postStartCommand — fails. Reject early with actionable guidance.
+    if [[ -f .git && ! -d .git ]]; then
+        echo "Error: workspace is a git submodule, which is not supported as a sandbox root." >&2
+        echo "The submodule's .git pointer is relative to the parent repo and does not" >&2
+        echo "resolve inside the container. Run ralph from the parent repository, or clone" >&2
+        echo "the submodule's remote URL as a standalone repository." >&2
+        exit 1
+    fi
+
     local config="$CONFIG_DIR/container/devcontainer.json"
     if [[ ! -f "$config" ]]; then
         echo "Error: devcontainer config not found at $config" >&2
