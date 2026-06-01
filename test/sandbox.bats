@@ -47,6 +47,21 @@ path_without() {
     [[ "$output" == *"not inside a git repository"* ]]
 }
 
+@test "sandbox fails when workspace is a git submodule worktree" {
+    command -v devcontainer >/dev/null 2>&1 || skip "devcontainer CLI not installed"
+    # Simulate a submodule worktree: relocate the gitdir and replace .git
+    # with a file containing a relative pointer (as `git submodule add` does).
+    # The target must resolve so `git rev-parse --is-inside-work-tree` still
+    # succeeds — that's the realistic scenario we want to reject. Keep the
+    # relocated gitdir inside the temp workspace so teardown cleans it up;
+    # writing outside TEST_DIR leaks state and makes the test flaky.
+    mv .git submodule-gitdir
+    echo "gitdir: submodule-gitdir" > .git
+    run "$RALPH" sandbox
+    [[ "$status" -ne 0 ]]
+    [[ "$output" == *"workspace is a git submodule"* ]]
+}
+
 @test "sandbox fails when config is missing" {
     command -v devcontainer >/dev/null 2>&1 || skip "devcontainer CLI not installed"
     # shellcheck disable=SC2030
@@ -103,6 +118,22 @@ setup_sandbox_mock() {
 #!/usr/bin/env bash
 printf '%s\n' "$@" >> "$DEVCONTAINER_CALL_LOG"
 printf -- '---\n' >> "$DEVCONTAINER_CALL_LOG"
+# Validate --mount values like the real CLI: only type/source/target (and an
+# optional external) keys are accepted. Catches unsupported keys (e.g. readonly)
+# that the real devcontainer up would reject.
+prev=""
+for arg in "$@"; do
+    if [[ "$prev" == "--mount" ]]; then
+        IFS=',' read -ra parts <<< "$arg"
+        for part in "${parts[@]}"; do
+            case "${part%%=*}" in
+                type|source|target|external) ;;
+                *) echo "mock devcontainer: unsupported mount key in '$arg'" >&2; exit 2 ;;
+            esac
+        done
+    fi
+    prev="$arg"
+done
 exit 0
 MOCKEOF
     chmod +x "$mock_bin/devcontainer"
@@ -251,6 +282,60 @@ MKDIREOF
     HOME="$fake_home" run "$RALPH" sandbox
     [[ "$status" -eq 0 ]]
     run ! grep -q "target=/home/node/.copilot" "$DEVCONTAINER_CALL_LOG"
+# ─── GPG agent forwarding tests ─────────────────────────────────────────────
+# Installs a mock `gpgconf` into the sandbox mock-bin. With socket=yes it
+# reports a real Unix socket (created via python3) and a homedir containing a
+# pubring.kbx, exercising the forwarding path; with socket=no it reports a
+# bogus (non-socket) path so the `-S` guard rejects forwarding.
+setup_gpg_mock() {
+    local want_socket="$1"
+    local mock_bin="$TEST_DIR/mock-bin"
+    local gpg_home="$TEST_DIR/gnupg"
+    mkdir -p "$gpg_home"
+    if [[ "$want_socket" == "yes" ]]; then
+        command -v python3 >/dev/null 2>&1 || skip "python3 needed to create a test socket"
+        python3 -c 'import socket,sys; s=socket.socket(socket.AF_UNIX); s.bind(sys.argv[1])' \
+            "$gpg_home/S.gpg-agent" || skip "could not create test socket"
+        [[ -S "$gpg_home/S.gpg-agent" ]] || skip "test socket was not created"
+        echo "fake-keyring" > "$gpg_home/pubring.kbx"
+    fi
+    cat > "$mock_bin/gpgconf" << MOCKEOF
+#!/usr/bin/env bash
+# Only --list-dirs <name> is used by ralph.
+case "\$2" in
+    agent-extra-socket) echo "$gpg_home/nonexistent-extra" ;;
+    agent-socket)       [[ "$want_socket" == "yes" ]] && echo "$gpg_home/S.gpg-agent" || echo "$gpg_home/missing" ;;
+    homedir)            echo "$gpg_home" ;;
+esac
+MOCKEOF
+    chmod +x "$mock_bin/gpgconf"
+}
+
+@test "sandbox forwards gpg agent socket and public keyring when available" {
+    setup_sandbox_mock
+    setup_gpg_mock yes
+    run "$RALPH" sandbox
+    [[ "$status" -eq 0 ]]
+    grep -q "target=/home/node/.gnupg/S.gpg-agent$" "$DEVCONTAINER_CALL_LOG"
+    grep -q "target=/home/node/.gnupg/pubring.kbx$" "$DEVCONTAINER_CALL_LOG"
+}
+
+@test "sandbox falls back from extra socket to standard agent socket" {
+    setup_sandbox_mock
+    setup_gpg_mock yes
+    run "$RALPH" sandbox
+    [[ "$status" -eq 0 ]]
+    # The extra socket path is bogus, so forwarding must use the standard one.
+    run ! grep -q "nonexistent-extra" "$DEVCONTAINER_CALL_LOG"
+    grep -q "target=/home/node/.gnupg/S.gpg-agent$" "$DEVCONTAINER_CALL_LOG"
+}
+
+@test "sandbox does not forward gpg when no agent socket exists" {
+    setup_sandbox_mock
+    setup_gpg_mock no
+    run "$RALPH" sandbox
+    [[ "$status" -eq 0 ]]
+    run ! grep -q "/home/node/.gnupg/" "$DEVCONTAINER_CALL_LOG"
 }
 
 @test "sandbox hash detection fails when no hashing command exists" {

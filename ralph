@@ -121,6 +121,7 @@ Options:
       --skip-push      Don't push after each iteration
       --dry-run        Print what would be executed without running
   -v, --verbose        Show backend commands, raw output, and exit codes
+  -y, --yes            Skip the confirmation when running outside a sandbox
   -h, --help           Show this help message
 
 Examples:
@@ -287,6 +288,20 @@ cmd_sandbox() {
         exit 1
     fi
 
+    # A submodule worktree's `.git` is a file containing a relative gitdir
+    # pointer (e.g. `gitdir: ../../.git/modules/foo`). Bind-mounting the
+    # workspace at /workspace in the container leaves the pointer unchanged,
+    # so it resolves to a path that doesn't exist inside the container and
+    # every subsequent git command — including devcontainer's own
+    # postStartCommand — fails. Reject early with actionable guidance.
+    if [[ -f .git && ! -d .git ]]; then
+        echo "Error: workspace is a git submodule, which is not supported as a sandbox root." >&2
+        echo "The submodule's .git pointer is relative to the parent repo and does not" >&2
+        echo "resolve inside the container. Run ralph from the parent repository, or clone" >&2
+        echo "the submodule's remote URL as a standalone repository." >&2
+        exit 1
+    fi
+
     local config="$CONFIG_DIR/container/devcontainer.json"
     if [[ ! -f "$config" ]]; then
         echo "Error: devcontainer config not found at $config" >&2
@@ -320,6 +335,27 @@ cmd_sandbox() {
     if [[ -n "${SSH_AUTH_SOCK:-}" ]]; then
         mounts+=("type=bind,source=$SSH_AUTH_SOCK,target=/tmp/ssh-agent.sock")
         ssh_env=("--remote-env" "SSH_AUTH_SOCK=/tmp/ssh-agent.sock")
+    fi
+
+    # GPG agent forwarding — lets the build loop sign commits with the host key
+    # without copying any private key material into the container. The host
+    # gpg-agent holds the secret; the container's gpg reaches it over the
+    # forwarded socket and reads the mounted public keyring. Prefer the agent's
+    # restricted "extra" socket, falling back to the standard socket.
+    if command -v gpgconf >/dev/null 2>&1; then
+        local gpg_sock gpg_home
+        gpg_sock="$(gpgconf --list-dirs agent-extra-socket 2>/dev/null)"
+        [[ -S "$gpg_sock" ]] || gpg_sock="$(gpgconf --list-dirs agent-socket 2>/dev/null)"
+        if [[ -S "$gpg_sock" ]]; then
+            mounts+=("type=bind,source=$gpg_sock,target=/home/node/.gnupg/S.gpg-agent")
+            gpg_home="$(gpgconf --list-dirs homedir 2>/dev/null)"
+            if [[ -f "$gpg_home/pubring.kbx" ]]; then
+                # The devcontainer CLI's --mount only accepts type/source/target
+                # (and optional external); it rejects a `readonly` key, unlike
+                # the static mounts in devcontainer.json.
+                mounts+=("type=bind,source=$gpg_home/pubring.kbx,target=/home/node/.gnupg/pubring.kbx")
+            fi
+        fi
     fi
     if [[ -n "${OPENAI_API_KEY:-}" ]]; then
         ssh_env+=("--remote-env" "OPENAI_API_KEY=$OPENAI_API_KEY")
@@ -480,8 +516,9 @@ cmd_loop() {
     local skip_push=false
     local dry_run=false
     local verbose=false
+    local assume_yes=false
 
-    ARGS=$(getopt -o n:g:m:b:vh --long iterations:,goal:,model:,backend:,skip-push,dry-run,verbose,help -n 'ralph' -- "$@")
+    ARGS=$(getopt -o n:g:m:b:vyh --long iterations:,goal:,model:,backend:,skip-push,dry-run,verbose,yes,help -n 'ralph' -- "$@")
     eval set -- "$ARGS"
 
     while true; do
@@ -493,6 +530,7 @@ cmd_loop() {
             --skip-push)     skip_push=true;      shift ;;
             --dry-run)       dry_run=true;        shift ;;
             -v|--verbose)    verbose=true;        shift ;;
+            -y|--yes)        assume_yes=true;     shift ;;
             -h|--help)       usage ;;
             --)              shift; break ;;
         esac
@@ -578,6 +616,19 @@ cmd_loop() {
         truncate_line "⚠️  $BACKEND_PERMISSION_WARNING" "$line_width" >&2
         truncate_line "⚠️  For safer execution, use the provided devcontainer." "$line_width" >&2
         echo "" >&2
+
+        # Interactive opt-out. Only prompt when attached to a terminal and not
+        # auto-confirmed; non-interactive callers (CI, cron, /loop, tests)
+        # proceed as before. Dry-run executes nothing dangerous, so never prompts.
+        if ! $assume_yes && ! $dry_run && [[ -t 0 ]]; then
+            printf 'Continue anyway? [y/N] ' >&2
+            local reply=''
+            read -r reply
+            if [[ ! "$reply" =~ ^[Yy] ]]; then
+                echo 'Aborted.' >&2
+                exit 1
+            fi
+        fi
     fi
 
     local iteration=0
