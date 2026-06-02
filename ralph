@@ -15,7 +15,7 @@ ARCHIVE_DIR=".ralph"
 # build_backend_cmd(model) which populates the BACKEND_CMD array.
 # Adding a new backend only requires a new function and a SUPPORTED_BACKENDS entry.
 
-SUPPORTED_BACKENDS=(claude codex)
+SUPPORTED_BACKENDS=(claude codex copilot)
 
 # shellcheck disable=SC2034  # Variables are set here and consumed in cmd_loop
 backend_claude() {
@@ -48,6 +48,23 @@ backend_codex() {
     build_backend_cmd() {
         local model="$1"
         BACKEND_CMD=(codex exec "$BACKEND_PERMISSION_FLAG" --json --model "$model")
+    }
+}
+
+# shellcheck disable=SC2034  # Variables are set here and consumed in cmd_loop
+backend_copilot() {
+    BACKEND_NAME="copilot"
+    BACKEND_CLI="copilot"
+    BACKEND_DEFAULT_MODEL="claude-sonnet-4.6"
+    BACKEND_PERMISSION_FLAG="--yolo"
+    BACKEND_PERMISSION_WARNING="Copilot will have unrestricted access to tools (file writes, shell commands, etc)."
+    BACKEND_JQ_FLAGS=(-rs)
+    BACKEND_JQ_FILTER='(map(select(.type == "assistant.message")) | last | .data.content // null) // ([ .[] | select(.type == "tool.execution_complete" and .data.success == true) | (.data.result.content // .data.result.detailedContent // "") ] | join("\n") | if . == "" then null else . end) // empty'
+    BACKEND_STDIN_PROMPT=false
+    # shellcheck disable=SC2317,SC2329  # Invoked indirectly via resolve_backend
+    build_backend_cmd() {
+        local model="$1"
+        BACKEND_CMD=(copilot --output-format=json "$BACKEND_PERMISSION_FLAG" --model "$model" -p)
     }
 }
 
@@ -100,7 +117,7 @@ Options:
   -n, --iterations N   Max iterations (plan default: 3, build default: 50)
   -g, --goal TEXT      Goal to inject into the prompt template
   -m, --model MODEL    Model to use (default depends on backend)
-  -b, --backend NAME   Backend to use (default: claude)
+  -b, --backend NAME   Backend to use: claude, codex, copilot (default: claude)
       --skip-push      Don't push after each iteration
       --dry-run        Print what would be executed without running
   -v, --verbose        Show backend commands, raw output, and exit codes
@@ -292,7 +309,7 @@ cmd_sandbox() {
         exit 1
     fi
 
-    mkdir -p "$HOME/.claude" "$HOME/.codex"
+    mkdir -p "$HOME/.claude" "$HOME/.codex" "$HOME/.copilot"
 
     # Runtime mounts (conditional on host file existence)
     local mounts=()
@@ -309,6 +326,9 @@ cmd_sandbox() {
     fi
     if [[ -d "$HOME/.codex" ]]; then
         mounts+=("type=bind,source=$HOME/.codex,target=/home/node/.codex")
+    fi
+    if [[ -d "$HOME/.copilot" ]]; then
+        mounts+=("type=bind,source=$HOME/.copilot,target=/home/node/.copilot")
     fi
 
     local ssh_env=()
@@ -351,6 +371,12 @@ cmd_sandbox() {
     fi
     if [[ -n "${ANTHROPIC_API_KEY+set}" ]]; then
         ssh_env+=("--remote-env" "ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}")
+    fi
+    if [[ -n "${GH_TOKEN:-}" ]]; then
+        ssh_env+=("--remote-env" "GH_TOKEN=$GH_TOKEN")
+    fi
+    if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+        ssh_env+=("--remote-env" "GITHUB_TOKEN=$GITHUB_TOKEN")
     fi
 
     # Shell history volume (deterministic per workspace)

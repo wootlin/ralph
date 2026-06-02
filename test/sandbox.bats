@@ -212,6 +212,76 @@ MOCKEOF
     run ! grep -q "^ANTHROPIC_API_KEY=" "$DEVCONTAINER_CALL_LOG"
 }
 
+@test "sandbox propagates GH_TOKEN when set" {
+    setup_sandbox_mock
+    unset GH_TOKEN
+    export GH_TOKEN="gh-token-123"
+    run "$RALPH" sandbox
+    [[ "$status" -eq 0 ]]
+    grep -q "^GH_TOKEN=gh-token-123$" "$DEVCONTAINER_CALL_LOG"
+}
+
+@test "sandbox does not propagate GH_TOKEN when unset" {
+    setup_sandbox_mock
+    unset GH_TOKEN
+    run "$RALPH" sandbox
+    [[ "$status" -eq 0 ]]
+    run ! grep -q "^GH_TOKEN=" "$DEVCONTAINER_CALL_LOG"
+}
+
+@test "sandbox propagates GITHUB_TOKEN when set" {
+    setup_sandbox_mock
+    unset GITHUB_TOKEN
+    export GITHUB_TOKEN="github-token-abc"
+    run "$RALPH" sandbox
+    [[ "$status" -eq 0 ]]
+    grep -q "^GITHUB_TOKEN=github-token-abc$" "$DEVCONTAINER_CALL_LOG"
+}
+
+@test "sandbox does not propagate GITHUB_TOKEN when unset" {
+    setup_sandbox_mock
+    unset GITHUB_TOKEN
+    run "$RALPH" sandbox
+    [[ "$status" -eq 0 ]]
+    run ! grep -q "^GITHUB_TOKEN=" "$DEVCONTAINER_CALL_LOG"
+}
+
+# ─── optional ~/.copilot mount tests ────────────────────────────────────────
+# HOME is overridden to an isolated tmp dir so cmd_sandbox's `mkdir -p` runs
+# against a path under our control and we can observe the conditional mount
+# branch deterministically — without polluting the test runner's real $HOME.
+
+@test "sandbox mounts ~/.copilot when host directory exists" {
+    setup_sandbox_mock
+    local fake_home="$TEST_DIR/fake-home"
+    mkdir -p "$fake_home"
+    HOME="$fake_home" run "$RALPH" sandbox
+    [[ "$status" -eq 0 ]]
+    grep -qF "type=bind,source=$fake_home/.copilot,target=/home/node/.copilot" "$DEVCONTAINER_CALL_LOG"
+}
+
+@test "sandbox skips ~/.copilot mount when host directory does not exist" {
+    setup_sandbox_mock
+    local fake_home="$TEST_DIR/fake-home"
+    mkdir -p "$fake_home"
+    # cmd_sandbox's unconditional `mkdir -p ~/.copilot` otherwise satisfies the
+    # `[[ -d ~/.copilot ]]` check tautologically. Shadow mkdir in mock-bin to
+    # filter out the .copilot arg so the conditional observes an absent dir;
+    # remaining args are forwarded to the real mkdir found later in PATH.
+    cat > "$TEST_DIR/mock-bin/mkdir" << 'MKDIREOF'
+#!/usr/bin/env bash
+args=()
+for a in "$@"; do
+    [[ "$a" == */.copilot ]] && continue
+    args+=("$a")
+done
+[[ ${#args[@]} -eq 0 ]] && exit 0
+PATH="${PATH#*:}" exec mkdir "${args[@]}"
+MKDIREOF
+    chmod +x "$TEST_DIR/mock-bin/mkdir"
+    HOME="$fake_home" run "$RALPH" sandbox
+    [[ "$status" -eq 0 ]]
+    run ! grep -q "target=/home/node/.copilot" "$DEVCONTAINER_CALL_LOG"
 # ─── GPG agent forwarding tests ─────────────────────────────────────────────
 # Installs a mock `gpgconf` into the sandbox mock-bin. With socket=yes it
 # reports a real Unix socket (created via python3) and a homedir containing a

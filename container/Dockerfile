@@ -68,8 +68,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends shellcheck \
 RUN corepack enable pnpm
 
 # Directories and permissions
-RUN mkdir -p /workspace /home/node/.claude /home/node/.codex /commandhistory /usr/local/share/npm-global \
-  && chown -R node:node /workspace /home/node/.claude /home/node/.codex /commandhistory /usr/local/share/npm-global
+RUN mkdir -p /workspace /home/node/.claude /home/node/.codex /home/node/.copilot /commandhistory /usr/local/share/npm-global \
+  && chown -R node:node /workspace /home/node/.claude /home/node/.codex /home/node/.copilot /commandhistory /usr/local/share/npm-global
 
 # Shell history persistence
 RUN SNIPPET="export PROMPT_COMMAND='history -a' && export HISTFILE=/commandhistory/.bash_history" \
@@ -103,6 +103,9 @@ RUN npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}
 
 # Codex CLI
 RUN npm install -g @openai/codex
+
+# GitHub Copilot CLI
+RUN npm install -g @github/copilot
 
 # dev-browser (headless browser for AI agents, uses Playwright/Chromium)
 RUN npm install -g dev-browser \
